@@ -273,7 +273,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
         # load the login HTML template using importlib.resources
         try:
             template_path = importlib.resources.files("nya") / "html" / "login.html"
-            with template_path.open("r") as f:
+            with template_path.open("r", encoding="utf-8") as f:
                 html_content = f.read()
         except (FileNotFoundError, TypeError, ImportError):
             return JSONResponse(

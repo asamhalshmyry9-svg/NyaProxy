@@ -19,7 +19,9 @@ def register_page_routes(app: FastAPI, dashboard: "DashboardAPI") -> None:
     async def index(request: Request):
         """Render the dashboard HTML."""
         try:
-            with importlib.resources.open_text("nya.html", "index.html") as f:
+            with importlib.resources.open_text(
+                "nya.html", "index.html", encoding="utf-8"
+            ) as f:
                 html_content = f.read()
             html_content = html_content.replace(
                 "{{ root_path }}", request.scope.get("root_path", "")
