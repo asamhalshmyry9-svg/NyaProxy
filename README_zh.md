@@ -122,6 +122,10 @@ server:
     enabled: true
     level: info
     log_file: app.log
+  gateway_logging:
+    enabled: true
+    directory: gateway-logs
+    retention: 100
   dashboard:
     enabled: true
   cors:
@@ -304,6 +308,7 @@ apis:
 - 浏览器场景下使用凭证时，请将 `server.cors.allow_origins` 限制为可信来源。
 - 使用 `allowed_paths` 和 `allowed_methods` 限制客户端可访问的接口范围。
 - 日志应视为敏感数据，尤其是启用 debug 级别时。
+- `server.gateway_logging` 会为每次上游尝试保存一套类似 TauriTavern 的完整证据：客户端原始请求、最终上游请求、全部请求与响应头、精确原始请求与响应字节、状态码、耗时、哈希、chunk 数、内容编码，以及可解码时的完整 UTF-8 响应文本。默认只保留最新 `retention` 条。日志会包含完整凭证与内容，仅适合个人本机部署。
 
 ## 频率限制
 

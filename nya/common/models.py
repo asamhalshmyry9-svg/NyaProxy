@@ -37,6 +37,12 @@ class ProxyRequest:
         # original url from the proxy request
         self._url: "URL" = _url
 
+        # Preserve the exact client-side request before key injection or body
+        # substitution. Gateway audit logs record both this original form and
+        # the final upstream request.
+        self.original_headers: Headers = Headers(headers or {})
+        self.original_content: bytes = bytes(content or b"")
+
         # final url to be requested, will be set later
         self.url: Optional[str] = None
 

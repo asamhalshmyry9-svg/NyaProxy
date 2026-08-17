@@ -177,6 +177,8 @@ cython_debug/
 
 watch.txt
 config.yaml
+/data/
+/gateway-logs/
 # Serena MCP tool state
 .serena/
 

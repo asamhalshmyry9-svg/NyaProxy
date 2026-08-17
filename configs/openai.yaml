@@ -1,10 +1,14 @@
-# yaml-language-server: $schema=https://raw.githubusercontent.com/Nya-Foundation/NyaProxy/main/nya/schema.json
+# yaml-language-server: $schema=https://raw.githubusercontent.com/asamhalshmyry9-svg/NyaProxy/main/nya/schema.json
 server:
   api_key: change-me-proxy-key # replace before deploying; this key gates ALL access to NyaProxy
   logging:
     enabled: true
     level: info
     log_file: app.log
+  gateway_logging:
+    enabled: true
+    directory: gateway-logs
+    retention: 100
   proxy:
     enabled: false
     address: socks5://username:password@proxy.example.com:1080

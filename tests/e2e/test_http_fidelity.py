@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -147,3 +149,33 @@ def test_x_real_ip_is_honoured_from_a_trusted_proxy(proxy_server):
 
     assert first.status_code == 200
     assert second.status_code == 200, "X-Real-IP from a trusted proxy was ignored"
+
+
+def test_full_gateway_log_captures_exact_request_and_response(proxy_server, tmp_path):
+    proxy_url = proxy_server(gateway_logging_enabled=True)
+    request_body = b'{"model":"gemini-test","stream":false,"message":"hello"}'
+
+    response = httpx.post(
+        f"{proxy_url}/api/mock/v1/gateway-log",
+        headers=proxy_headers(**{"Content-Type": "application/json"}),
+        content=request_body,
+        timeout=5,
+    )
+    assert response.status_code == 200
+
+    log_dir = tmp_path / "gateway-logs"
+    index = json.loads((log_dir / "gateway-index.json").read_text("utf-8"))
+    assert len(index) == 1
+    meta = index[0]
+    log_id = meta["id"]
+    request_doc = json.loads(
+        (log_dir / f"gateway-{log_id}.request.json").read_text("utf-8")
+    )
+
+    assert request_doc["upstream"]["body"]["value"]["model"] == "gemini-test"
+    assert (log_dir / f"gateway-{log_id}.request.raw").read_bytes() == request_body
+    assert (log_dir / f"gateway-{log_id}.response.raw").read_bytes() == response.content
+    assert meta["completed"] is True
+    assert meta["statusCode"] == 200
+    assert meta["requestBytes"] == len(request_body)
+    assert meta["responseBytes"] == len(response.content)

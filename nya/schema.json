@@ -415,6 +415,26 @@
                     },
                     "additionalProperties": false
                 },
+                "gateway_logging": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {
+                            "type": "boolean",
+                            "description": "Save full gateway requests and responses"
+                        },
+                        "directory": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Gateway log directory, relative to the configuration file unless absolute"
+                        },
+                        "retention": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Number of newest gateway attempts to retain"
+                        }
+                    },
+                    "additionalProperties": false
+                },
                 "proxy": {
                     "type": "object",
                     "properties": {

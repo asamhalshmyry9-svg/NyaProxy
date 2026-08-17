@@ -11,6 +11,7 @@ from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from ..utils.formatting import format_elapsed_time, json_safe_dumps
 from ..utils.redaction import redact_sensitive_data
+from ..services.gateway_logs import GatewayLogEntry, GatewayLogStore
 from .streaming import (
     _HOP_BY_HOP_HEADERS,
     apply_response_headers,
@@ -45,6 +46,7 @@ class RequestExecutor:
         self.config = config
         self.client = self._create_client()
         self.metrics_collector = metrics_collector
+        self.gateway_logs = GatewayLogStore.from_config(config)
         self._close_callbacks = []
 
     def _create_client(self) -> httpx.AsyncClient:
@@ -82,6 +84,11 @@ class RequestExecutor:
         """
         actual_start_time = time.time()
         api_name = request.api_name
+        # Materialize the exact header set that will be sent upstream before
+        # the audit entry is created. Re-preparing this set in
+        # ``execute_request`` is idempotent.
+        request.headers = httpx.Headers(self._prepare_request_headers(request.headers))
+        gateway_entry = self.gateway_logs.begin(request) if self.gateway_logs else None
 
         track = bool(self.metrics_collector)
 
@@ -97,7 +104,9 @@ class RequestExecutor:
         # and the failure is counted — otherwise active leaks upward forever.
         try:
             response = await self.execute_request(request, self._get_timeout(api_name))
-        except Exception:
+        except BaseException as error:
+            if gateway_entry:
+                gateway_entry.finish(error)
             if track:
                 self.metrics_collector.record_response(
                     api_name,
@@ -107,6 +116,14 @@ class RequestExecutor:
                     request.trail_path,
                 )
             raise
+
+        if gateway_entry:
+            gateway_entry.record_response_head(
+                response.status_code,
+                response.headers,
+                http_version=getattr(response, "http_version", ""),
+                reason_phrase=getattr(response, "reason_phrase", ""),
+            )
 
         # Log request/response details on error response
         if response.status_code >= 400:
@@ -125,7 +142,15 @@ class RequestExecutor:
         )
 
         if detect_streaming_content(response.headers):
-            streaming = await handle_streaming_response(response)
+            streaming = await handle_streaming_response(
+                response,
+                on_chunk=(
+                    gateway_entry.write_response_chunk if gateway_entry else None
+                ),
+                on_error=(gateway_entry.mark_error if gateway_entry else None),
+            )
+            if gateway_entry:
+                streaming._nya_add_finalizer(gateway_entry.finish)
             if track:
                 streaming._nya_add_finalizer(
                     lambda: self.metrics_collector.record_response(
@@ -139,8 +164,10 @@ class RequestExecutor:
             return streaming
 
         try:
-            result = await self.handle_normal_response(response)
-        except Exception:
+            result = await self.handle_normal_response(response, gateway_entry)
+        except BaseException as error:
+            if gateway_entry:
+                gateway_entry.finish(error)
             if track:
                 self.metrics_collector.record_response(
                     api_name,
@@ -150,6 +177,9 @@ class RequestExecutor:
                     request.trail_path,
                 )
             raise
+
+        if gateway_entry:
+            gateway_entry.finish()
 
         if track:
             self.metrics_collector.record_response(
@@ -216,6 +246,7 @@ class RequestExecutor:
     async def handle_normal_response(
         self,
         response: httpx.Response,
+        gateway_entry: Optional[GatewayLogEntry] = None,
     ) -> Union[Response, JSONResponse]:
         """
         Create the response to send back to client.
@@ -235,6 +266,8 @@ class RequestExecutor:
             # Read raw bytes without any decoding/processing
             chunks = []
             async for chunk in response.aiter_raw():
+                if gateway_entry:
+                    gateway_entry.write_response_chunk(chunk)
                 chunks.append(chunk)
 
             proxy_response = Response(
@@ -267,15 +300,24 @@ class RequestExecutor:
 
     @staticmethod
     def _prepare_request_headers(headers: httpx.Headers):
-        """Strip hop-by-hop headers before sending the upstream request."""
+        """Strip hop-by-hop headers and preserve content-coding capability.
+
+        httpx advertises gzip by default. A transparent proxy must not do that
+        on behalf of a downstream client that did not advertise decompression
+        support, otherwise encoded bytes can reach a client that only expects
+        identity content (notably TauriTavern's SSE parser).
+        """
         connection_tokens = {
             token.strip().lower()
             for token in headers.get("connection", "").split(",")
             if token.strip()
         }
         excluded = _HOP_BY_HOP_HEADERS | connection_tokens
-        return [
+        prepared = [
             (name, value)
             for name, value in headers.multi_items()
             if name.lower() not in excluded
         ]
+        if not any(name.lower() == "accept-encoding" for name, _ in prepared):
+            prepared.append(("accept-encoding", "identity"))
+        return prepared

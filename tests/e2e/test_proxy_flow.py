@@ -1,4 +1,3 @@
-import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 
@@ -192,7 +191,6 @@ def test_key_rate_limit_queues_until_next_key_window(proxy_server, upstream_serv
         )
         assert response.status_code == 200
 
-    started_at = time.monotonic()
     response = httpx.get(
         f"{proxy_url}/api/mock/v1/rate-limited",
         headers=proxy_headers(),
@@ -200,7 +198,14 @@ def test_key_rate_limit_queues_until_next_key_window(proxy_server, upstream_serv
     )
 
     assert response.status_code == 200
-    assert time.monotonic() - started_at >= 0.75
+    repeated_key = upstream.records[0]["key"]
+    same_key_records = [
+        record for record in upstream.records if record["key"] == repeated_key
+    ]
+    assert len(same_key_records) == 2
+    assert (
+        same_key_records[1]["received_at"] - same_key_records[0]["received_at"] >= 0.75
+    )
     assert [record["key"] for record in upstream.records] == [
         "key-a",
         "key-b",

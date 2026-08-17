@@ -136,6 +136,10 @@ server:
     enabled: true
     level: info
     log_file: app.log
+  gateway_logging:
+    enabled: true
+    directory: gateway-logs
+    retention: 100
   dashboard:
     enabled: true
 
@@ -343,6 +347,7 @@ See [Request Body Substitution](docs/request_body_substitution.md) for the full 
 ## Operations
 
 - **Logging** — configured under `server.logging`; `enabled: false` disables both console and file sinks. The log file rotates at 10 MB with the last 5 files retained. `debug` logs request/response metadata (with secrets redacted).
+- **Full gateway logs** — `server.gateway_logging` writes one TauriTavern-style evidence bundle per upstream attempt: original client request, final upstream request, every header, exact raw request and response bytes, timing, status, hashes, chunk counts, content encoding, and a readable response copy when the body is UTF-8 text. The index and bundles live next to the configuration by default, and only the newest `retention` attempts are kept. These files intentionally contain complete credentials and content; use this mode only on a private local installation.
 - **Config reload** — a config change triggers a full process restart via the file-watch supervisor. In-flight requests are dropped and in-memory state (queues, rate-limit windows, metrics) resets. Use `--no-reload` if you'd rather restart explicitly.
 - **State** — all rate limiting, queueing, and metrics state is in-memory and per-process. Run a single instance per credential pool; running replicas would give each its own independent limits.
 

@@ -363,6 +363,18 @@ class ConfigManager:
             "log_file": self.config.get_str("server.logging.log_file", "app.log"),
         }
 
+    def get_gateway_logging_config(self) -> Dict[str, Any]:
+        """Get full-fidelity gateway request/response logging settings."""
+        return {
+            "enabled": self.config.get_bool("server.gateway_logging.enabled", True),
+            "directory": self.config.get_str(
+                "server.gateway_logging.directory", "gateway-logs"
+            ),
+            "retention": self.config.get_int(
+                "server.gateway_logging.retention", 100
+            ),
+        }
+
     def get_proxy_enabled(self) -> bool:
         """
         Check if the proxy is enabled.

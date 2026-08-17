@@ -99,6 +99,7 @@ def upstream_server():
             body = raw_body.decode("utf-8", errors="replace")
 
         record = {
+            "received_at": time.monotonic(),
             "method": request.method,
             "path": f"/{path}",
             "query": request.url.query,
@@ -219,6 +220,7 @@ def proxy_server(tmp_path: Path, upstream_server):
         queue_max_size: int = 20,
         max_workers: int = 3,
         dashboard_enabled: bool = False,
+        gateway_logging_enabled: bool = False,
         trusted_proxies: tuple[str, ...] = (),
         extra_api_config: str = "",
         keys: tuple = UPSTREAM_KEYS,
@@ -237,6 +239,10 @@ server:
     enabled: true
     level: info
     log_file: {log_path}
+  gateway_logging:
+    enabled: {str(gateway_logging_enabled).lower()}
+    directory: gateway-logs
+    retention: 100
   dashboard:
     enabled: {str(dashboard_enabled).lower()}
   trusted_proxies: [{", ".join(f'"{p}"' for p in trusted_proxies)}]

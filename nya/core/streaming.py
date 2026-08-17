@@ -18,7 +18,12 @@ __all__ = [
 ]
 
 
-async def handle_streaming_response(response: httpx.Response) -> StreamingResponse:
+async def handle_streaming_response(
+    response: httpx.Response,
+    *,
+    on_chunk: Optional[Callable[[bytes], None]] = None,
+    on_error: Optional[Callable[[BaseException], None]] = None,
+) -> StreamingResponse:
     """
     Handle a streaming response (SSE)
 
@@ -73,8 +78,12 @@ async def handle_streaming_response(response: httpx.Response) -> StreamingRespon
         try:
             async for chunk in response.aiter_raw():
                 if chunk:
+                    if on_chunk is not None:
+                        on_chunk(chunk)
                     yield chunk
-        except Exception as e:
+        except BaseException as e:
+            if on_error is not None:
+                on_error(e)
             logger.error(
                 f"Error in streaming response: {str(e)}, traceback: {traceback.format_exc()}"
             )
